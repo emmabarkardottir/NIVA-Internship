@@ -136,3 +136,55 @@ if (!dir.exists(output_dir)) dir.create(output_dir, recursive = TRUE)
 
 ggsave(
   filename = file.path(output_dir, "oneout_allout.png"), plot = map_plot, width = 8, height = 6, dpi = 300)
+
+# Extract species code (first 3 letters) from StockKeyLabel and force uppercase
+worst_per_area_ICES <- worst_per_area_ICES %>%
+  mutate(species_code = toupper(substr(StockKeyLabel, 1, 3)))
+
+worst_per_area_MEDBS <- worst_per_area_MEDBS %>%
+  mutate(species_code = toupper(substr(StockKeyLabel, 1, 3)))
+
+# Join species info to spatial shapes
+map_species_ICES <- left_join(ices_shape, worst_per_area_ICES, by = c("Area_Full" = "ICES_Area"))
+map_species_GFCM <- left_join(gfcm_shape, worst_per_area_MEDBS, by = c("F_GSA_LIB" = "Area"))
+
+# Create full list of unique species codes
+all_species_codes <- sort(unique(c(
+  na.omit(map_species_ICES$species_code),
+  na.omit(map_species_GFCM$species_code)
+)))
+
+library(scales)
+
+species_colors <- setNames(
+  hue_pal()(length(all_species_codes)),
+  all_species_codes
+)
+
+
+# Species map plot
+species_map_plot <- ggplot() +
+  geom_sf(data = world, fill = "gray90", color = "gray40") +
+  geom_sf(data = map_species_ICES, aes(fill = species_code), color = "black", alpha = 0.7) +
+  geom_sf(data = map_species_GFCM, aes(fill = species_code), color = "black", alpha = 0.7) +
+  scale_fill_manual(
+    name = "Species (worst stock)",
+    values = species_colors,
+    labels = toupper(all_species_codes),  # Ensure labels in legend are uppercase
+    na.translate = FALSE
+  ) +
+  coord_sf(xlim = x_limits, ylim = y_limits, expand = FALSE) +
+  theme_minimal() +
+  theme(legend.position = "right") +
+  labs(title = "Species Responsible for Worst Stock per Area")
+
+print(species_map_plot)
+
+# Save species map
+ggsave(
+  filename = file.path(output_dir, "worst_species_map.png"),
+  plot = species_map_plot,
+  width = 8,
+  height = 6,
+  dpi = 300
+)
